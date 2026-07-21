@@ -157,6 +157,7 @@ def build_the_indexed_stock(list_of_chunks):
     print("\nDATA ARE SAVED SUCCESSFULLY.\n")
 
 
+import sys
 
 def get_retrive_data(query, k):
     tok_query = my_tokenizer(query)
@@ -171,7 +172,12 @@ def get_retrive_data(query, k):
 
     scores = bm25.get_scores(tok_query)
 
-    top_k_indexes = numpy.argsort(scores)[::-1][:k]
+
+    top_k_indexes = numpy.argsort(scores)
+    print(top_k_indexes)
+    sys.exit(1)
+
+
 
     res = []
     for idx in top_k_indexes:
