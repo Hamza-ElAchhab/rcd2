@@ -2,13 +2,18 @@ import os
 import sys
 from pydantic import BaseModel
 import re
+from rank_bm25 import BM25Okapi
 import ast
+import pickle
+import json
+import numpy
+from transformers import AutoTokenizer, AutoModelForCausalLM
+
 
 
 
 PY_EXT = [".py"]
 DOCS_TXT_EXT = [".txt", ".md"]
-
 
 
 
@@ -26,7 +31,6 @@ def offsetts(lst):
     for ele in lst:
         res.append(len(ele) + res[-1] + 1)
     return res
-
 
 
 def chunking_code(path, content):
@@ -58,7 +62,6 @@ def chunking_code(path, content):
     return res
 
 
-
 def chunking_docs(path, contnt):
     res = []
 
@@ -79,13 +82,17 @@ def chunking_docs(path, contnt):
             chunk += line
         
         else:
-            
+            if line.strip():
+                obj = Chunk(file_path=path, start=strt, end=strt+len(chunk), content=chunk, typee="docs")
+                res.append(obj)
+                strt += len(chunk)
+                chunk = line
+    
+    if line.strip():
+        obj = Chunk(file_path=path, start=strt, end=strt+len(chunk), content=chunk, typee="docs")
+        res.append(obj)
 
-
-
-
-
-
+    return res
 
 
 
@@ -108,28 +115,115 @@ def chunking_data(repo):
                 lst = chunking_code(current_path, content)
                 res.extend(lst)
 
-
             elif ext in DOCS_TXT_EXT:
-                print(ext)
+                current_path = os.path.join(root, file)
+                with open(current_path, "r") as f:
+                    content = f.read()
+                lst = chunking_docs(current_path, content)
+                res.extend(lst)
     
     return res
 
 
 
 
+def my_tokenizer(s):
+    s = s.lower()
+    return [e for e in s.split() if len(e) > 1]
+
+
+
+
+def build_the_indexed_stock(list_of_chunks):
+
+    data_to_index_it = []
+
+    for chunk_obj in list_of_chunks:
+        data_to_index_it.append(my_tokenizer(chunk_obj.content))
+    
+    bm25_obj = BM25Okapi(data_to_index_it)
+    binaries = pickle.dumps(bm25_obj)
+    with open("BM25.pkl", "wb") as f:
+        f.write(binaries)
+    
+    lst_dct_objs = []
+    for obj in list_of_chunks:
+        lst_dct_objs.append(obj.model_dump())
+    data = json.dumps(lst_dct_objs, indent=2)
+    with open("chnks.json", "w") as f:
+        f.write(data)
+    
+    print("\nDATA ARE SAVED SUCCESSFULLY.\n")
+
+
+
+def get_retrive_data(query, k):
+    tok_query = my_tokenizer(query)
+
+    with open("/home/hel-achh/goinfre/rcd2/BM25.pkl", "rb") as f:
+        data = f.read()
+    bm25 = pickle.loads(data)
+
+    with open("/home/hel-achh/goinfre/rcd2/chnks.json", "r") as f:
+        data = f.read()
+    list_of_dicts = json.loads(data)
+
+    scores = bm25.get_scores(tok_query)
+
+    top_k_indexes = numpy.argsort(scores)[::-1][:k]
+
+    res = []
+    for idx in top_k_indexes:
+        res.append(list_of_dicts[idx])
+    
+    return res
+
+
+def merge_data(lst):
+    res = ""
+    for l in lst:
+        res += l["content"]
+        res += "\n"
+    return res
+
+
+
+def generate_answer(fully_prompt, new_max):
+    pass
+
+
+
+
+question = "WHAT IS THE VLLM ?"
+
+chunks_objs = chunking_data("/home/hel-achh/goinfre/rcd2/vllm-0.10.1")
+build_the_indexed_stock(chunks_objs)
+
+sttrr_merged = merge_data(get_retrive_data(question, 10))
+
+
+fully_prompt = f"""
+THE CONTENT:
+{sttrr_merged}
+
+
+THE QUESTION IS : {question}
+
+- answer from the content on this question.
+
+ANSWER:
+
+"""
 
 
 
 
 
 
-
-
-res = chunking_data("/home/hel-achh/goinfre/rcd2/vllm-0.10.1")
-
-
-for o in res:
-    print(o.content)
-    print(len(o.content))
-    print("=" * 20)
+# for o in chunks_objs:
+#     if o.typee == "docs":
+#         print(o.content)
+#         print(len(o.content))
+#         print("=" * 20)
+#         print(o.file_path)
 
