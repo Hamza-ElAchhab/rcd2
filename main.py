@@ -9,11 +9,12 @@ import json
 import numpy
 from transformers import AutoTokenizer, AutoModelForCausalLM
 
-
+[]
 
 
 PY_EXT = [".py"]
 DOCS_TXT_EXT = [".txt", ".md"]
+
 
 
 
@@ -175,7 +176,7 @@ def get_retrive_data(query, k):
     res = []
     for idx in top_k_indexes:
         res.append(list_of_dicts[idx])
-    
+
     return res
 
 
@@ -189,12 +190,28 @@ def merge_data(lst):
 
 
 def generate_answer(fully_prompt, new_max):
-    pass
+    TOKENIZER = AutoTokenizer.from_pretrained("Qwen/Qwen3-0.6B")
+    MODEL = AutoModelForCausalLM.from_pretrained("Qwen/Qwen3-0.6B")
+
+    inputs = TOKENIZER(fully_prompt, return_tensors="pt")
+    outputs = MODEL.generate(**inputs, max_new_tokens=new_max)
+
+    ids = outputs[0].tolist()
+    len_of_prompt = len(inputs["input_ids"][0].tolist())
+    ids = ids[len_of_prompt:]
+    answer = TOKENIZER.decode(ids)
+    return answer
 
 
 
 
-question = "WHAT IS THE VLLM ?"
+
+
+
+
+
+
+question = "What is this function (test_vllm_gc_ed) takes in parameters??"
 
 chunks_objs = chunking_data("/home/hel-achh/goinfre/rcd2/vllm-0.10.1")
 build_the_indexed_stock(chunks_objs)
@@ -215,15 +232,7 @@ ANSWER:
 
 """
 
-
-
-
-
-
-# for o in chunks_objs:
-#     if o.typee == "docs":
-#         print(o.content)
-#         print(len(o.content))
-#         print("=" * 20)
-#         print(o.file_path)
+answer = generate_answer(fully_prompt, 90)
+print()
+print(answer)
 
